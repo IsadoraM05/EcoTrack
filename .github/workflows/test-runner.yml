@@ -1,0 +1,22 @@
+name: Testar Runner Docker
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verificar-docker:
+    runs-on:
+      - self-hosted
+      - Windows
+      - X64
+
+    steps:
+      - name: Verificar Docker
+        shell: pwsh
+        run: |
+          docker version
+          docker compose version
+          docker ps --format "table {{.Names}}\t{{.Status}}"
