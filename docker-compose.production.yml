@@ -1,0 +1,40 @@
+services:
+  ecotrack-oracle:
+    image: gvenzl/oracle-free:23-slim
+    environment:
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:?Defina ORACLE_PASSWORD}
+      APP_USER: ecotrack
+      APP_USER_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD}
+    volumes:
+      - oracle_production_data:/opt/oracle/oradata
+    networks:
+      - production-network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    restart: unless-stopped
+
+  ecotrack-api:
+    build: .
+    depends_on:
+      ecotrack-oracle:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:oracle:thin:@//ecotrack-oracle:1521/FREEPDB1
+      DB_USERNAME: ecotrack
+      DB_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD}
+    ports:
+      - "127.0.0.1:8082:8080"
+    networks:
+      - production-network
+    restart: unless-stopped
+
+volumes:
+  oracle_production_data:
+
+networks:
+  production-network:
+    driver: bridge
