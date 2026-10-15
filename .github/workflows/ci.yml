@@ -1,9 +1,19 @@
-name: EcoTrack - CI
+
+name: EcoTrack CI/CD
 
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ecotrack-deployment-main
+  cancel-in-progress: false
 
 jobs:
   build-test:
@@ -20,19 +30,13 @@ jobs:
         ports:
           - 1521:1521
         options: >-
-          --health-cmd="healthcheck.sh"
-          --health-interval=30s
-          --health-timeout=10s
-          --health-retries=20
-          --health-start-period=120s
-
-    env:
-      DB_URL: jdbc:oracle:thin:@//localhost:1521/FREEPDB1
-      DB_USERNAME: ecotrack
-      DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
+          --health-cmd "healthcheck.sh"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
 
     steps:
-      - name: Baixar código
+      - name: Baixar codigo
         uses: actions/checkout@v4
 
       - name: Configurar Java 21
@@ -42,32 +46,120 @@ jobs:
           java-version: '21'
           cache: maven
 
-      - name: Compilar e executar testes
+      - name: Dar permissao ao Maven Wrapper
+        run: chmod +x mvnw
+
+      - name: Build e testes automatizados
+        env:
+          DB_URL: jdbc:oracle:thin:@//localhost:1521/FREEPDB1
+          DB_USERNAME: ecotrack
+          DB_PASSWORD: ${{ secrets.CI_DB_PASSWORD }}
         run: ./mvnw -B clean verify
 
-      - name: Salvar relatórios dos testes
+      - name: Publicar relatorios de testes
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: relatorios-testes
           path: target/surefire-reports/
-          if-no-files-found: ignore
+          if-no-files-found: warn
 
   docker-build:
     name: Construir imagem Docker
-    runs-on: ubuntu-latest
     needs: build-test
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Baixar código
+      - name: Baixar codigo
         uses: actions/checkout@v4
 
       - name: Configurar Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Construir imagem
+      - name: Construir imagem Docker
         uses: docker/build-push-action@v6
         with:
           context: .
           push: false
           tags: ecotrack:ci
+
+  deploy-staging:
+    name: Deploy Staging
+    needs: docker-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 30
+
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+
+      - name: Deploy em staging
+        shell: powershell
+        run: |
+          docker compose -p ecotrack-staging `
+            --env-file "C:\ecotrack-deploy\.env.staging" `
+            -f docker-compose.staging.yml `
+            up -d --build
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Falha no deploy de staging."
+          }
+
+      - name: Verificar API staging
+        shell: powershell
+        run: |
+          $status = ""
+          for ($i = 1; $i -le 30; $i++) {
+            $status = & curl.exe -s -o NUL -w "%{http_code}" http://localhost:8081/
+
+            if ($LASTEXITCODE -eq 0 -and $status -eq "401") {
+              Write-Host "Staging respondeu com HTTP 401, conforme esperado."
+              exit 0
+            }
+
+            Start-Sleep -Seconds 5
+          }
+
+          throw "API staging nao respondeu conforme esperado. Ultimo status: $status"
+
+  deploy-production:
+    name: Deploy Production
+    needs: deploy-staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 30
+
+
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+
+      - name: Deploy em producao
+        shell: powershell
+        run: |
+          docker compose -p ecotrack-production `
+            --env-file "C:\ecotrack-deploy\.env.production" `
+            -f docker-compose.production.yml `
+            up -d --build
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "Falha no deploy de producao."
+          }
+
+      - name: Verificar API producao
+        shell: powershell
+        run: |
+          $status = ""
+          for ($i = 1; $i -le 30; $i++) {
+            $status = & curl.exe -s -o NUL -w "%{http_code}" http://localhost:8082/
+
+            if ($LASTEXITCODE -eq 0 -and $status -eq "401") {
+              Write-Host "Producao respondeu com HTTP 401, conforme esperado."
+              exit 0
+            }
+
+            Start-Sleep -Seconds 5
+          }
+
+          throw "API producao nao respondeu conforme esperado. Ultimo status: $status"
