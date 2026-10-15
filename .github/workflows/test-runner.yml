@@ -15,8 +15,13 @@ jobs:
 
     steps:
       - name: Verificar Docker
-        shell: pwsh
+        shell: powershell
         run: |
           docker version
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
           docker compose version
-          docker ps --format "table {{.Names}}\t{{.Status}}"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+          docker ps
+          if ($LASTEXITCODE -ne 0) { exit 1 }
