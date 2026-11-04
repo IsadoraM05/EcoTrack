@@ -287,5 +287,97 @@ Como evolução do projeto, podem ser implementadas:
 
 Atualmente, staging e produção são ambientes Docker locais, dependentes da disponibilidade do computador que executa o runner.
 
+## Testes Automatizados BDD
+
+O EcoTrack possui testes automatizados de comportamento (BDD — *Behavior-Driven Development*) para validar funcionalidades da API REST relacionadas ao gerenciamento de lixeiras inteligentes.
+
+Os testes foram desenvolvidos utilizando **Cucumber, Gherkin, REST Assured e JUnit 5**, permitindo validar requisições HTTP, respostas JSON e contratos definidos por JSON Schema.
+
+### Tecnologias utilizadas nos testes
+
+- **Cucumber:** definição e execução dos cenários BDD.
+- **Gherkin:** descrição dos cenários utilizando Dado, Quando e Então.
+- **REST Assured:** execução de requisições HTTP e validação das respostas.
+- **JUnit 5:** integração com a execução automatizada.
+- **JSON Schema:** validação da estrutura das respostas JSON.
+- **Maven:** compilação e execução dos testes.
+
+### Cenários implementados
+
+| Cenário | Validação | Resultado esperado |
+|---|---|---|
+| Cadastro válido de lixeira | Status HTTP, conteúdo JSON e JSON Schema | 200 OK |
+| Cadastro com capacidade negativa | Rejeição de dados inválidos | 400 Bad Request |
+| Consulta de lixeira inexistente | Tratamento de recurso não encontrado | 404 Not Found |
+
+Os cenários estão definidos em `src/test/resources/features/lixeiras.feature`.
+
+### Estrutura dos testes
+
+```text
+src/test/
+├── java/br/com/fiap/EcoTrack/
+│   ├── RunCucumberTest.java
+│   └── steps/
+│       ├── CucumberSpringConfiguration.java
+│       └── LixeiraSteps.java
+└── resources/
+    ├── features/
+    │   └── lixeiras.feature
+    └── schemas/
+        └── lixeira-schema.json
+```
+
+### Pré-requisitos
+
+Para executar os testes, é necessário:
+
+1. Ter o **JDK 21** instalado e configurado.
+2. Ter o banco de dados Oracle configurado e acessível.
+3. Iniciar a API EcoTrack em `http://localhost:8080`.
+4. Possuir um usuário de testes cadastrado na aplicação, com credenciais válidas para autenticação HTTP Basic.
+
+### Execução dos testes
+
+No PowerShell, configure as credenciais de um usuário de testes existente:
+
+```powershell
+$env:API_TEST_USER = "email-do-usuario-de-teste"
+$env:API_TEST_PASSWORD = "senha-do-usuario-de-teste"
+```
+
+Execute os testes com o Maven Wrapper:
+
+```powershell
+.\mvnw.cmd "-Dtest=RunCucumberTest" "-Dapi.user=$env:API_TEST_USER" "-Dapi.password=$env:API_TEST_PASSWORD" test
+```
+
+Os testes realizam requisições HTTP à API em execução e verificam automaticamente os comportamentos esperados.
+
+**Segurança:** não armazenar credenciais reais no README, no código-fonte ou no repositório GitHub. Utilizar somente usuários dedicados ao ambiente de testes.
+
+### Relatórios de execução
+
+Após a execução, o Cucumber gera os seguintes relatórios:
+
+- `target/cucumber-report.html` — relatório visual dos cenários.
+- `target/cucumber-report.json` — resultados estruturados em JSON.
+- `target/surefire-reports/` — resultados da execução pelo Maven Surefire.
+
+Para abrir o relatório HTML no Windows:
+
+```powershell
+Start-Process ".\target\cucumber-report.html"
+```
+
+A pasta `target/` contém arquivos gerados durante a compilação e normalmente não deve ser versionada no Git.
+
+### Resultados
+
+Os três cenários foram executados com sucesso, validando o cadastro de lixeiras com dados válidos, a rejeição de capacidades negativas e o tratamento de consultas a identificadores inexistentes.
+
+### Possibilidades de expansão
+
+A estrutura de testes poderá ser ampliada para contemplar outras funcionalidades do EcoTrack, como gerenciamento de localizações, registros de coletas, alertas e autenticação.
 
 
